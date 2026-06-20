@@ -51,7 +51,6 @@ Desync percentages are formatted without floating-point print support: values ar
 - `RDTSC`: direct timestamp counter instruction.
 - `RDTSCP`: serialized timestamp counter instruction.
 - `io_apicTimer`: external timer source read through I/O ports.
-- `pstate`: current P-state from `MSR_PSTATE_STATUS`.
 - `pm_counter`: number of EFER reads completed during the probe interval.
 
 # Example output
@@ -60,22 +59,23 @@ Clean run:
 
 ```
 Starting sanity check...
-
+ 
 ========================================
             EFER RESULTS
 ========================================
-  SVME state                     OFF
-  PM Counter                     8421 cycles
+  SVME state                     OFF      
+  PM Counter                     2899       2899 expected
   EFER read average              OK         105 cycles (limit: 1000 cycles)
   Power state elevation          OK         0 violations (limit: 1)
-  TSC desynchronization          OK         0.1% desync (limit: 5%)
-  Interval desynchronization     OK         0.17% desync (limit: 5%)
-  Workload desynchronization     OK         2 cycles (limit: 20 cycles)
+  TSC desynchronization          OK         0.18% desync (limit: 5%)
+  Interval desynchronization     OK         0.5% desync (limit: 5%)
+  Workload desynchronization     OK         0 cycles (limit: 20 cycles)
 ----------------------------------------
   Result: CLEAN  (0/5 checks flagged)
 ========================================
-
+ 
 Sanity check completed.
+
 ```
 
 Flagged run (VM with TSC/APERF counter spoofing):
