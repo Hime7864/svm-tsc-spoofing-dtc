@@ -24,7 +24,7 @@
     <ProjectGuid>{c31d662a-a0aa-400c-bc40-8ba2771d3a34}</ProjectGuid>
     <RootNamespace>llvmkmd</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>SVM FingerPrinting</ProjectName>
+    <ProjectName>SVM-Tsc-Spoofing-Dtc</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
