@@ -294,7 +294,7 @@ public:
         interval_desync_ratio = (expected_sync_ratio / 5.0) - 1.0;
 
         reported_cycles = aperf_delta_ajusted;
-        missing_cycles = abs64((UINT64)((double)aperf_delta_ajusted * interval_desync_ratio * tsc_desync_ratio));
+        missing_cycles = abs64((UINT64)((double)aperf_delta_ajusted * interval_desync_ratio));
 		counter_total = (UINT64)((double)pm_counter * io_ratio);
 
         old_cppc = MSR::CPPC_REQUEST();
@@ -307,7 +307,6 @@ public:
             svme_enabled = MSR::EFER().svme;
         pstate_vilolation = MSR::PSTATE_STATUS().CurPstate == cmd.PstateCmd;
         MSR::CPPC_REQUEST(old_cppc);
-
         return;
     }
 
@@ -368,27 +367,27 @@ public:
         int flagged_count = 0;
 
         printf("\n");
-        printf("========================================\n");
-        printf("            EFER RESULTS\n");
-        printf("========================================\n");
+        printf("================================================================================\n");
+        printf("                                EFER RESULTS\n");
+        printf("================================================================================\n");
 
         printf("  %-30s %-9s\n", "SVME state", svme_enabled ? "ON" : "OFF");
         auto io_ratio = 920000.0 / (double)(pm1.io_apicTimer - pm0.io_apicTimer);
 
-        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, pm_counter + (UINT64)((double)pm_counter * (1.0 + fabs(interval_desync_ratio) * fabs(tsc_desync_ratio))) / (UINT64)((double)(pm1.aperf - pm0.aperf) * io_ratio));
+        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, pm_counter + (UINT64)((double)reported_cycles / (fabs(tsc_desync_ratio) / 2.0)));
 
 		auto efer_flagged = report_efer_average(1000);
 		sprintf(detail, "%llu %s", get_efer_average(), "cycles");
-        printf("  %-30s %-9s  %s (limit: %s)\n",
+        printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "EFER read average",
             efer_flagged ? "FLAGGED" : "OK",
             detail,
-			"1000 cycles");
+			"1000");
         flagged_count += efer_flagged ? 1 : 0;
 
         auto elevation_flagged = report_power_elevation();
         sprintf(detail, "%i violations", elevation_flagged ? 1 : 0);
-        printf("  %-30s %-9s  %s (limit: %s)\n",
+        printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "Power state elevation",
             elevation_flagged ? "FLAGGED" : "OK",
             detail,
@@ -397,7 +396,7 @@ public:
 
         auto tsc_flagged = report_tsc_desync(5.0);
         format_desync_percent(get_tsc_desync(), detail);
-        printf("  %-30s %-9s  %s (limit: %s)\n",
+        printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "TSC desynchronization",
             tsc_flagged ? "FLAGGED" : "OK",
             detail,
@@ -406,7 +405,7 @@ public:
 
         auto interval_flagged = report_interval_desync(5.0);
         format_desync_percent(get_interval_desync(), detail);
-        printf("  %-30s %-9s  %s (limit: %s)\n",
+        printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "Interval desynchronization",
             interval_flagged ? "FLAGGED" : "OK",
             detail,
@@ -415,19 +414,19 @@ public:
 
         auto workload_flagged = report_workload_desync(20);
         sprintf(detail, "%llu cycles", get_workload_desync());
-        printf("  %-30s %-9s  %s (limit: %s)\n",
+        printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "Workload desynchronization",
             workload_flagged ? "FLAGGED" : "OK",
             detail,
             "20 cycles");
         flagged_count += workload_flagged ? 1 : 0;
 
-        printf("----------------------------------------\n");
+        printf("--------------------------------------------------------------------------------\n");
         if (flagged_count == 0)
             printf("  Result: CLEAN  (0/5 checks flagged)\n");
         else
             printf("  Result: FLAGGED (%i/5 checks flagged)\n", flagged_count);
-        printf("========================================\n\n");
+        printf("================================================================================\n\n");
         return;
     }
 };
