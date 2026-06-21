@@ -355,8 +355,30 @@ public:
     }
 };
 
-NTSTATUS DriverEntry()
+bool check_suport()
 {
+    auto feature_ext = CPUID::feature_ext_id_ebx();
+    if (feature_ext.CPPC)
+    {
+        auto cppc = MSR::CPPC_ENABLE();
+        if (!cppc.CPPC_En)
+        {
+            cppc.CPPC_En = 1;
+            MSR::CPPC_ENABLE(cppc);
+        }
+    }
+    else
+    {
+        printf("CPPC is not supported on this processor.\n");
+    }
+    return feature_ext.CPPC;
+}
+
+NTSTATUS DriverEntry()
+{   
+	if(!check_suport())
+		return STATUS_NOT_SUPPORTED;
+
 	printf("Starting sanity check...\n");
     MSR_CPPC_REQUEST cppc_request;
     auto cppc_capabilities = MSR::CPPC_CAPABILITY_1();

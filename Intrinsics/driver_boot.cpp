@@ -12,15 +12,15 @@ volatile void FreeAndExit()
     UINT64 func2 = (UINT64)nt.fn_PsTerminateSystemThread;
     auto func3 = nt.fn_RtlFillMemory;
     auto func_base = (PVOID)FreeAndExit;
-    auto range1 = ((UINT64)func_base - host_driver_base) - 8;
-    auto range2 = (host_driver_size - (range1 + 0x110));
+    auto range1 = (UINT64)func_base - host_driver_base;
+    auto range2 = (host_driver_size - (range1 + 0x200));
     auto cr3 = _mm_readcr3();
 
     func3((PVOID)host_driver_base, (SIZE_T)range1, 0x00);
-    func3((PVOID)(host_driver_base + (range1 + 0x110)), (SIZE_T)range2, 0x00);
-    func3(func_base, (SIZE_T)0xB0, 0x00);
+    func3((PVOID)(host_driver_base + (range1 + 0x200)), (SIZE_T)range2, 0x00);
+    func3(func_base, (SIZE_T)0xA0, 0x00);
 
-    if (cr3 == 0x1AD000ull)
+    //if (cr3 == 0x1AD000ull)
     {
         __asm {
             xor ecx, ecx
@@ -28,18 +28,18 @@ volatile void FreeAndExit()
             call rax
         }
     }
-    __asm {
-        mov rcx, [host_driver_base]
-        mov rdx, [func1]
-        mov r8, [func2]
-        call self
-    self:
-        sub rsp, 8h
-        mov rax, r8
-        mov[rsp], rax
-        mov rax, rdx
-        jmp rax
-    }
+    //__asm {
+    //    mov rcx, [host_driver_base]
+    //    mov rdx, [func1]
+    //    mov r8, [func2]
+    //    call self
+    //self:
+    //    sub rsp, 8h
+    //    mov rax, r8
+    //    mov[rsp], rax
+    //    mov rax, rdx
+    //    jmp rax
+    //}
 }
 
 void CleanupDriver()

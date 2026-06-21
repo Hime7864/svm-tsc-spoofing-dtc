@@ -817,6 +817,8 @@ public:
 
     static MSR_CPPC_ENABLE CPPC_ENABLE();
 
+	static void CPPC_ENABLE(MSR_CPPC_ENABLE enable);
+
     static MSR_CPPC_CAPABILITY_2 CPPC_CAPABILITY_2();
 
     static MSR_CPPC_REQUEST CPPC_REQUEST();
