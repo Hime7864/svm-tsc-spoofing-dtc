@@ -4,7 +4,6 @@
 
 struct PERFORMANCE_DATA
 {
-private:
     static UINT64 NAKED io_apic_rtc()
     {
         __asm {
@@ -53,7 +52,6 @@ private:
             ret
         }
     }
-public:
     UINT64 aperf;
     UINT64 mperf;
     UINT64 aperf_r;
@@ -150,6 +148,32 @@ private:
         pm_counter = 0;
         unit = _mm_readmsr(MSR::_MSR_L3_PACKAGE_ENERGY_STATUS);
         while (unit == _mm_readmsr(MSR::_MSR_L3_PACKAGE_ENERGY_STATUS))
+        {
+            // funny thing here is only about 5% of the work load should be this read
+            _mm_readmsr(MSR::_MSR_EFER);
+            pm_counter++;
+        }
+
+        pm1.read_tsc();
+        //  should be forced to 1 via cppc request earlier
+        pm1.pstate = MSR::PSTATE_STATUS().CurPstate;
+        pm1.apply_overhead(&overhead);
+
+        return;
+    }
+
+    void Probe_Legacy()
+    {
+        pm0.pstate = MSR::PSTATE_STATUS().CurPstate;
+
+        PERFORMANCE_DATA overhead;
+        pm0.get_overhead(overhead);
+
+        pm0.read_tsc();
+
+        pm_counter = 0;
+        UINT64 unit = PERFORMANCE_DATA::io_apic_rtc() + 25000000;
+        while (unit > PERFORMANCE_DATA::io_apic_rtc())
         {
             // funny thing here is only about 5% of the work load should be this read
             _mm_readmsr(MSR::_MSR_EFER);
@@ -287,6 +311,57 @@ public:
         return;
     }
 
+    void Run_Legacy()
+    {
+        Probe_Legacy();
+
+        auto mperf_delta = pm1.mperf - pm0.mperf;
+        auto aperf_delta = pm1.aperf - pm0.aperf;
+        auto mperf_r_delta = pm1.mperf_r - pm0.mperf_r;
+        auto aperf_r_delta = pm1.aperf_r - pm0.aperf_r;
+        auto msr_tsc_delta = pm1.msr_tsc - pm0.msr_tsc;
+        auto io_apic_delta = pm1.io_apicTimer - pm0.io_apicTimer;
+        auto rdtsc_delta = pm1.rdtsc - pm0.rdtsc;
+        auto rdtscp_delta = pm1.rdtscp - pm0.rdtscp;
+
+        auto io_ratio = 920000.0 / (double)io_apic_delta;
+        auto expected_p0 = MSR::PSTATE(0).get_frequency_mhz() * 1000;
+
+        auto mperf_delta_ajusted = (UINT64)((double)mperf_delta * io_ratio);
+        auto aperf_delta_ajusted = (UINT64)((double)aperf_delta * io_ratio);
+        auto mperf_r_delta_ajusted = (UINT64)((double)mperf_r_delta * io_ratio);
+        auto aperf_r_delta_ajusted = (UINT64)((double)aperf_r_delta * io_ratio);
+        auto msr_tsc_delta_ajusted = (UINT64)((double)msr_tsc_delta * io_ratio);
+        auto io_apic_delta_ajusted = (UINT64)((double)io_apic_delta * io_ratio);
+        auto rdtsc_delta_ajusted = (UINT64)((double)rdtsc_delta * io_ratio);
+        auto rdtscp_delta_ajusted = (UINT64)((double)rdtscp_delta * io_ratio);
+
+        double sync_ratio = 0.0;
+        sync_ratio += (double)aperf_delta / (double)aperf_r_delta;
+        sync_ratio += (double)mperf_delta / (double)mperf_r_delta;
+        sync_ratio += (double)mperf_delta / (double)msr_tsc_delta;
+        sync_ratio += (double)mperf_delta / (double)rdtsc_delta;
+        sync_ratio += (double)mperf_delta / (double)rdtscp_delta;
+        tsc_desync_ratio = (sync_ratio / 5.0) - 1.0;
+
+        double expected_sync_ratio = 0.0;
+        expected_sync_ratio += (double)expected_p0 / (double)mperf_delta_ajusted;
+        expected_sync_ratio += (double)expected_p0 / (double)mperf_r_delta_ajusted;
+        expected_sync_ratio += (double)expected_p0 / (double)msr_tsc_delta_ajusted;
+        expected_sync_ratio += (double)expected_p0 / (double)rdtsc_delta_ajusted;
+        expected_sync_ratio += (double)expected_p0 / (double)rdtscp_delta_ajusted;
+        interval_desync_ratio = (expected_sync_ratio / 5.0) - 1.0;
+
+        reported_cycles = aperf_delta_ajusted;
+        missing_cycles = abs64((UINT64)((double)aperf_delta_ajusted * interval_desync_ratio * tsc_desync_ratio));
+        counter_total = (UINT64)((double)pm_counter * io_ratio);
+
+        svme_enabled = MSR::EFER().svme;
+        pstate_vilolation = 0;
+
+        return;
+    }
+
     void log_results()
     {
         char detail[128]{};
@@ -374,28 +449,57 @@ bool check_suport()
     return feature_ext.CPPC;
 }
 
+bool is_amd_cpu()
+{
+    int cpu_info[4];
+    __cpuid(cpu_info, 0);
+    return cpu_info[1] == 'htuA';
+}
+
 NTSTATUS DriverEntry()
 {   
-	if(!check_suport())
-		return STATUS_NOT_SUPPORTED;
+    if (!is_amd_cpu())
+    {
+		printf("This sanity check is only supported on AMD CPUs.\n");
+        return STATUS_NOT_SUPPORTED;
+    }
+    if (check_suport())
+    {
+        printf("Starting sanity check...\n");
+        MSR_CPPC_REQUEST cppc_request;
+        auto cppc_capabilities = MSR::CPPC_CAPABILITY_1();
+        cppc_request.MinPerf = cppc_capabilities.LowestPerf;
+        cppc_request.MaxPerf = cppc_capabilities.HighestPerf;
+        cppc_request.DesPerf = cppc_capabilities.NominalPerf; // This will Set P1 later on in RUN() and disabling boosting
 
-	printf("Starting sanity check...\n");
-    MSR_CPPC_REQUEST cppc_request;
-    auto cppc_capabilities = MSR::CPPC_CAPABILITY_1();
-    cppc_request.MinPerf = cppc_capabilities.LowestPerf;
-    cppc_request.MaxPerf = cppc_capabilities.HighestPerf;
-    cppc_request.DesPerf = cppc_capabilities.NominalPerf; // This will Set P1 later on in RUN() and disabling boosting
+        auto sanity = (SANITY_DATA*)ExAllocatePool(NonPagedPool, sizeof(SANITY_DATA));
 
-    auto sanity = (SANITY_DATA*)ExAllocatePool(NonPagedPool, sizeof(SANITY_DATA));
+        auto irql = _mm_readcr8();
+        _mm_writecr8(15);
+        sanity->Run(cppc_request);
+        _mm_writecr8(irql);
 
-    auto irql = _mm_readcr8();
-    _mm_writecr8(15);
-    sanity->Run(cppc_request);
-    _mm_writecr8(irql);
+        sanity->log_results();
 
-    sanity->log_results();
+        ExFreePool(sanity);
+        printf("Sanity check completed.\n");
+    }
+    else
+    {
+        printf("Starting sanity check...\n");
+        auto sanity = (SANITY_DATA*)ExAllocatePool(NonPagedPool, sizeof(SANITY_DATA));
 
-    ExFreePool(sanity);
-	printf("Sanity check completed.\n");
+        auto irql = _mm_readcr8();
+        _mm_writecr8(15);
+        sanity->Run_Legacy();
+        _mm_writecr8(irql);
+
+        sanity->log_results();
+
+        ExFreePool(sanity);
+        printf("Sanity check completed.\n");
+    }
+
+	
     return STATUS_SUCCESS;
 }
