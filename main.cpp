@@ -375,7 +375,7 @@ public:
         printf("  %-30s %-9s\n", "SVME state", svme_enabled ? "ON" : "OFF");
         auto io_ratio = 920000.0 / (double)(pm1.io_apicTimer - pm0.io_apicTimer);
 
-        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, (UINT64)((double)pm_counter * (1.0 + fabs(interval_desync_ratio) * fabs(tsc_desync_ratio))) / (UINT64)((double)(pm1.aperf - pm0.aperf) * io_ratio));
+        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, pm_counter + (UINT64)((double)pm_counter * (1.0 + fabs(interval_desync_ratio) * fabs(tsc_desync_ratio))) / (UINT64)((double)(pm1.aperf - pm0.aperf) * io_ratio));
 
 		auto efer_flagged = report_efer_average(1000);
 		sprintf(detail, "%llu %s", get_efer_average(), "cycles");
