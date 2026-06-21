@@ -60,22 +60,21 @@ Clean run:
 ```
 Starting sanity check...
  
-========================================
-            EFER RESULTS
-========================================
+================================================================================
+                                EFER RESULTS
+================================================================================
   SVME state                     OFF      
-  PM Counter                     2899       2899 expected
-  EFER read average              OK         105 cycles (limit: 1000 cycles)
-  Power state elevation          OK         0 violations (limit: 1)
-  TSC desynchronization          OK         0.18% desync (limit: 5%)
-  Interval desynchronization     OK         0.5% desync (limit: 5%)
-  Workload desynchronization     OK         0 cycles (limit: 20 cycles)
-----------------------------------------
+  PM Counter                     2891       2891 expected
+  EFER read average              OK         105 cycles           (limit: 1000)
+  Power state elevation          OK         0 violations         (limit: 1)
+  TSC desynchronization          OK         0.0% desync          (limit: 5%)
+  Interval desynchronization     OK         0.0% desync          (limit: 5%)
+  Workload desynchronization     OK         3 cycles             (limit: 20)
+--------------------------------------------------------------------------------
   Result: CLEAN  (0/5 checks flagged)
-========================================
+================================================================================
  
 Sanity check completed.
-
 ```
 
 Flagged run (VM with TSC/APERF counter spoofing):
@@ -83,19 +82,19 @@ Flagged run (VM with TSC/APERF counter spoofing):
 ```
 Starting sanity check...
  
-========================================
-            EFER RESULTS
-========================================
+================================================================================
+                                EFER RESULTS
+================================================================================
   SVME state                     OFF      
-  PM Counter                     1491       21122707744 expected
-  EFER read average              OK         168 cycles (limit: 1000 cycles)
-  Power state elevation          FLAGGED    1 violations (limit: 1)
-  TSC desynchronization          FLAGGED    376352.73% desync (limit: 5%)
-  Interval desynchronization     FLAGGED    376423.59% desync (limit: 5%)
-  Workload desynchronization     FLAGGED    45303369659 cycles (limit: 20 cycles)
-----------------------------------------
+  PM Counter                     1474       2948 expected
+  EFER read average              OK         146 cycles           (limit: 1000)
+  Power state elevation          FLAGGED    1 violations         (limit: 1)
+  TSC desynchronization          FLAGGED    290.90% desync       (limit: 5%)
+  Interval desynchronization     FLAGGED    289.61% desync       (limit: 5%)
+  Workload desynchronization     FLAGGED    13971898 cycles      (limit: 20)
+--------------------------------------------------------------------------------
   Result: FLAGGED (4/5 checks flagged)
-========================================
+================================================================================
  
 Sanity check completed.
 ```
