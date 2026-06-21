@@ -373,7 +373,9 @@ public:
         printf("========================================\n");
 
         printf("  %-30s %-9s\n", "SVME state", svme_enabled ? "ON" : "OFF");
-        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, (UINT64)((double)pm_counter * (1.0 + fabs(interval_desync_ratio) * fabs(tsc_desync_ratio))));
+        auto io_ratio = 920000.0 / (double)(pm1.io_apicTimer - pm0.io_apicTimer);
+
+        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, (UINT64)((double)pm_counter * (1.0 + fabs(interval_desync_ratio) * fabs(tsc_desync_ratio))) / (UINT64)((double)(pm1.aperf - pm0.aperf) * io_ratio));
 
 		auto efer_flagged = report_efer_average(1000);
 		sprintf(detail, "%llu %s", get_efer_average(), "cycles");
@@ -412,7 +414,7 @@ public:
         flagged_count += interval_flagged ? 1 : 0;
 
         auto workload_flagged = report_workload_desync(20);
-        sprintf(detail, "%lld cycles", get_workload_desync());
+        sprintf(detail, "%llu cycles", get_workload_desync());
         printf("  %-30s %-9s  %s (limit: %s)\n",
             "Workload desynchronization",
             workload_flagged ? "FLAGGED" : "OK",
