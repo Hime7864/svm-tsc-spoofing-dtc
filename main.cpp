@@ -237,8 +237,8 @@ public:
 
     INT64 get_workload_desync()
     {
-        auto batch_reported_cycles = reported_cycles / counter_total;
-        auto batch_expected_cycles = (reported_cycles + missing_cycles) / counter_total;
+        auto batch_reported_cycles = reported_cycles;
+        auto batch_expected_cycles = (reported_cycles + missing_cycles);
         return abs64(batch_reported_cycles - batch_expected_cycles);
 	}
 
@@ -265,7 +265,7 @@ public:
 		auto rdtsc_delta = pm1.rdtsc - pm0.rdtsc;
 		auto rdtscp_delta = pm1.rdtscp - pm0.rdtscp;
 
-        auto io_ratio = 920000.0 / (double)io_apic_delta;
+        auto io_ratio = (920000.0 / (double)io_apic_delta);
         auto expected_p0 = MSR::PSTATE(0).get_frequency_mhz() * 1000;
 
         auto mperf_delta_ajusted = (UINT64)((double)mperf_delta * io_ratio);
@@ -283,7 +283,7 @@ public:
 		sync_ratio += (double)mperf_delta / (double)msr_tsc_delta;
         sync_ratio += (double)mperf_delta / (double)rdtsc_delta;
         sync_ratio += (double)mperf_delta / (double)rdtscp_delta;
-        tsc_desync_ratio = (sync_ratio / 5.0) - 1.0;
+        tsc_desync_ratio = ((sync_ratio / 5.0) - 1.0) / (double)pm_counter;
 
         double expected_sync_ratio = 0.0;
         expected_sync_ratio += (double)expected_p0 / (double)mperf_delta_ajusted;
@@ -291,7 +291,7 @@ public:
         expected_sync_ratio += (double)expected_p0 / (double)msr_tsc_delta_ajusted;
         expected_sync_ratio += (double)expected_p0 / (double)rdtsc_delta_ajusted;
         expected_sync_ratio += (double)expected_p0 / (double)rdtscp_delta_ajusted;
-        interval_desync_ratio = (expected_sync_ratio / 5.0) - 1.0;
+        interval_desync_ratio = ((expected_sync_ratio / 5.0) - 1.0) / (double)pm_counter;
 
         reported_cycles = aperf_delta_ajusted;
         missing_cycles = abs64((UINT64)((double)aperf_delta_ajusted * interval_desync_ratio));
@@ -374,7 +374,7 @@ public:
         printf("  %-30s %-9s\n", "SVME state", svme_enabled ? "ON" : "OFF");
         auto io_ratio = 920000.0 / (double)(pm1.io_apicTimer - pm0.io_apicTimer);
 
-        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, pm_counter + (UINT64)((double)reported_cycles / (fabs(tsc_desync_ratio) / 2.0)));
+        printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, pm_counter * (UINT64)(fabs(tsc_desync_ratio / 2.0) + 1.0));
 
 		auto efer_flagged = report_efer_average(1000);
 		sprintf(detail, "%llu %s", get_efer_average(), "cycles");
@@ -418,7 +418,7 @@ public:
             "Workload desynchronization",
             workload_flagged ? "FLAGGED" : "OK",
             detail,
-            "20 cycles");
+            "20");
         flagged_count += workload_flagged ? 1 : 0;
 
         printf("--------------------------------------------------------------------------------\n");
