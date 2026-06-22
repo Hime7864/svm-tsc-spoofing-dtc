@@ -65,11 +65,11 @@ Starting sanity check...
 ================================================================================
   SVME state                     OFF      
   PM Counter                     2891       2891 expected
-  EFER read average              OK         105 cycles           (limit: 1000)
+  EFER read average              OK         105 cycles           (limit: 800)
   Power state elevation          OK         0 violations         (limit: 1)
-  TSC desynchronization          OK         0.0% desync          (limit: 5%)
-  Interval desynchronization     OK         0.0% desync          (limit: 5%)
-  Workload desynchronization     OK         3 cycles             (limit: 20)
+  TSC desynchronization          OK         0.0% desync          (limit: 2.5%)
+  Interval desynchronization     OK         0.0% desync          (limit: 10%)
+  Workload desynchronization     OK         3 cycles             (limit: 500)
 --------------------------------------------------------------------------------
   Result: CLEAN  (0/5 checks flagged)
 ================================================================================
@@ -87,11 +87,11 @@ Starting sanity check...
 ================================================================================
   SVME state                     OFF      
   PM Counter                     1474       2948 expected
-  EFER read average              OK         146 cycles           (limit: 1000)
+  EFER read average              OK         146 cycles           (limit: 800)
   Power state elevation          FLAGGED    1 violations         (limit: 1)
-  TSC desynchronization          FLAGGED    290.90% desync       (limit: 5%)
-  Interval desynchronization     FLAGGED    289.61% desync       (limit: 5%)
-  Workload desynchronization     FLAGGED    13971898 cycles      (limit: 20)
+  TSC desynchronization          FLAGGED    290.90% desync       (limit: 2.5%)
+  Interval desynchronization     FLAGGED    289.61% desync       (limit: 10%)
+  Workload desynchronization     FLAGGED    13971898 cycles      (limit: 500)
 --------------------------------------------------------------------------------
   Result: FLAGGED (4/5 checks flagged)
 ================================================================================

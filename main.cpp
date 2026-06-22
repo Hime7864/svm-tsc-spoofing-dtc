@@ -376,13 +376,13 @@ public:
 
         printf("  %-30s %-9i  %llu expected\n", "PM Counter", pm_counter, pm_counter * (UINT64)(fabs(tsc_desync_ratio / 2.0) + 1.0));
 
-		auto efer_flagged = report_efer_average(1000);
+		auto efer_flagged = report_efer_average(800);
 		sprintf(detail, "%llu %s", get_efer_average(), "cycles");
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "EFER read average",
             efer_flagged ? "FLAGGED" : "OK",
             detail,
-			"1000");
+			"800");
         flagged_count += efer_flagged ? 1 : 0;
 
         auto elevation_flagged = report_power_elevation();
@@ -394,31 +394,31 @@ public:
             "1");
         flagged_count += elevation_flagged ? 1 : 0;
 
-        auto tsc_flagged = report_tsc_desync(5.0);
+        auto tsc_flagged = report_tsc_desync(2.5);
         format_desync_percent(get_tsc_desync(), detail);
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "TSC desynchronization",
             tsc_flagged ? "FLAGGED" : "OK",
             detail,
-            "5%");
+            "2.5%");
         flagged_count += tsc_flagged ? 1 : 0;
 
-        auto interval_flagged = report_interval_desync(5.0);
+        auto interval_flagged = report_interval_desync(10.0);
         format_desync_percent(get_interval_desync(), detail);
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "Interval desynchronization",
             interval_flagged ? "FLAGGED" : "OK",
             detail,
-            "5%");
+            "10%");
         flagged_count += interval_flagged ? 1 : 0;
 
-        auto workload_flagged = report_workload_desync(20);
+        auto workload_flagged = report_workload_desync(500);
         sprintf(detail, "%llu cycles", get_workload_desync());
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "Workload desynchronization",
             workload_flagged ? "FLAGGED" : "OK",
             detail,
-            "20");
+            "500");
         flagged_count += workload_flagged ? 1 : 0;
 
         printf("--------------------------------------------------------------------------------\n");
