@@ -216,7 +216,6 @@ extern "C"
     NAKED inline UINT64 _mm_readmsr(_In_ UINT32 msr)
     {
         __asm {
-            mov ecx, ecx
             rdmsr
             shl rdx, 32
             or rax, rdx
@@ -228,7 +227,6 @@ extern "C"
     {
         __asm {
             mov r8, rdx
-            mov ecx, ecx
             mov eax, r8d
             shr r8, 32
             mov edx, r8d

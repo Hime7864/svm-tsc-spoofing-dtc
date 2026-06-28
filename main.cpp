@@ -118,6 +118,7 @@ private:
     UINT64 reported_cycles;
     UINT64 missing_cycles;
     UINT64 counter_total;
+	UINT64 irperf_extra_cycles;
     bool svme_enabled;
     bool pstate_vilolation;
 
@@ -247,6 +248,17 @@ public:
         return get_workload_desync() > threshold;
     }
 
+    INT64 get_irperf_extra_cycles()
+    {
+        return irperf_extra_cycles;
+	}
+
+    bool report_irperf_extra_cycles(INT64 threshold)
+    {
+        return get_irperf_extra_cycles() > threshold;
+	}
+
+
     void Run(MSR_CPPC_REQUEST target_cppc)
     {
         auto old_cppc = MSR::CPPC_REQUEST();
@@ -303,8 +315,14 @@ public:
         MSR_PSTATE_CONTROL cmd;
         cmd.PstateCmd = 0;
 		MSR::PSTATE_CONTROL(cmd);
+
+        auto irperf = MSR::IRPerfCount();
         for (int i = 0; i < pm_counter / 2; i++)
-            svme_enabled = MSR::EFER().svme;
+            _mm_readmsr(MSR::_MSR_EFER);
+        auto delta = (MSR::IRPerfCount() - irperf) - 12;
+        auto expected_delta = (pm_counter / 2) * 11;
+		svme_enabled = MSR::EFER().svme;
+		irperf_extra_cycles = delta - expected_delta;
         pstate_vilolation = MSR::PSTATE_STATUS().CurPstate == cmd.PstateCmd;
         MSR::CPPC_REQUEST(old_cppc);
         return;
@@ -391,13 +409,13 @@ public:
             "Power state elevation",
             elevation_flagged ? "FLAGGED" : "OK",
             detail,
-            "1");
+            "0");
         flagged_count += elevation_flagged ? 1 : 0;
 
         auto tsc_flagged = report_tsc_desync(2.5);
         format_desync_percent(get_tsc_desync(), detail);
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
-            "TSC desynchronization",
+            "P0 TSC desync",
             tsc_flagged ? "FLAGGED" : "OK",
             detail,
             "2.5%");
@@ -406,7 +424,7 @@ public:
         auto interval_flagged = report_interval_desync(10.0);
         format_desync_percent(get_interval_desync(), detail);
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
-            "Interval desynchronization",
+            "Crystal <-> P0 TSC desync",
             interval_flagged ? "FLAGGED" : "OK",
             detail,
             "10%");
@@ -415,17 +433,26 @@ public:
         auto workload_flagged = report_workload_desync(500);
         sprintf(detail, "%llu cycles", get_workload_desync());
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
-            "Workload desynchronization",
+            "APERF cycle desync",
             workload_flagged ? "FLAGGED" : "OK",
             detail,
             "500");
         flagged_count += workload_flagged ? 1 : 0;
 
+		auto irperf_flagged = report_irperf_extra_cycles(500);
+		sprintf(detail, "%llu cycles", get_irperf_extra_cycles());
+        printf("  %-30s %-9s  %-20s (limit: %s)\n",
+            "IRPerf cycles desync",
+            irperf_flagged ? "FLAGGED" : "OK",
+            detail,
+			"0");
+        flagged_count += irperf_flagged ? 1 : 0;
+
         printf("--------------------------------------------------------------------------------\n");
         if (flagged_count == 0)
-            printf("  Result: CLEAN  (0/5 checks flagged)\n");
+            printf("  Result: CLEAN  (0/6 checks flagged)\n");
         else
-            printf("  Result: FLAGGED (%i/5 checks flagged)\n", flagged_count);
+            printf("  Result: FLAGGED (%i/6 checks flagged)\n", flagged_count);
         printf("================================================================================\n\n");
         return;
     }
@@ -457,6 +484,130 @@ bool is_amd_cpu()
     return cpu_info[1] == 'htuA';
 }
 
+struct PEFF_CTL0
+{
+    union
+    {
+        UINT64 AsUINT64;
+        struct
+        {
+            UINT64 EventSelect0 : 1;
+            UINT64 EventSelect1 : 1;
+            UINT64 EventSelect2 : 1;
+            UINT64 EventSelect3 : 1;
+            UINT64 EventSelect4 : 1;
+            UINT64 EventSelect5 : 1;
+            UINT64 EventSelect6 : 1;
+            UINT64 EventSelect7 : 1;
+            UINT64 UnitMask : 8;
+            UINT64 OsUserMode : 2;
+            UINT64 Edge : 1;
+            UINT64 Reserve0 : 1;
+            UINT64 Int : 1;
+            UINT64 Reserve1 : 1;
+            UINT64 En : 1;
+            UINT64 Inv : 1;
+            UINT64 CntMask : 8;
+            UINT64 EventSelect8 : 1;
+            UINT64 EventSelect9 : 1;
+            UINT64 EventSelect10 : 1;
+            UINT64 EventSelect11 : 1;
+            UINT64 Reserve2 : 4;
+            UINT64 HostGuestOnly : 2;
+            UINT64 Reserve3 : 22;
+        };
+    };
+};
+
+struct PERF_LEGACY_CTL0
+{
+    union
+    {
+        UINT64 AsUINT64;
+        struct
+        {
+            UINT64 EventSelect0 : 1;
+            UINT64 EventSelect1 : 1;
+            UINT64 EventSelect2 : 1;
+            UINT64 EventSelect3 : 1;
+            UINT64 EventSelect4 : 1;
+            UINT64 EventSelect5 : 1;
+            UINT64 EventSelect6 : 1;
+            UINT64 EventSelect7 : 1;
+            UINT64 UnitMask : 8;
+            UINT64 OsUserMode : 2;
+            UINT64 Edge : 1;
+            UINT64 Reserve0 : 1;
+            UINT64 Int : 1;
+            UINT64 Reserve1 : 1;
+            UINT64 En : 1;
+            UINT64 Inv : 1;
+            UINT64 CntMask : 8;
+            UINT64 EventSelect8 : 1;
+            UINT64 EventSelect9 : 1;
+            UINT64 EventSelect10 : 1;
+            UINT64 EventSelect11 : 1;
+            UINT64 Reserve2 : 4;
+            UINT64 HostGuestOnly : 2;
+            UINT64 Reserve3 : 22;
+        };
+    };
+};
+
+struct PerfCntrGlobalCtl
+{
+    union
+    {
+        UINT64 AsUINT64;
+        struct
+        {
+            UINT64 PerfCntrEn0 : 1;
+			UINT64 PerfCntrEn1 : 1;
+            UINT64 PerfCntrEn2 : 1;
+            UINT64 PerfCntrEn3 : 1;
+            UINT64 PerfCntrEn4 : 1;
+            UINT64 PerfCntrEn5 : 1;
+			UINT64 Reserve0 : 58;
+        };
+	};
+};
+
+struct DF_PERF_CTL
+{
+    union
+    {
+        UINT64 AsUINT64;
+        struct
+        {
+            UINT64 EventSelect0 : 1;
+            UINT64 EventSelect1 : 1;
+            UINT64 EventSelect2 : 1;
+            UINT64 EventSelect3 : 1;
+            UINT64 EventSelect4 : 1;
+            UINT64 EventSelect5 : 1;
+            UINT64 EventSelect6 : 1;
+            UINT64 EventSelect7 : 1;
+            UINT64 UnitMask : 8;
+            UINT64 OsUserMode : 2;
+            UINT64 Edge : 1;
+            UINT64 Reserve0 : 1;
+            UINT64 Int : 1;
+            UINT64 Reserve1 : 1;
+            UINT64 En : 1;
+            UINT64 Inv : 1;
+            UINT64 CntMask : 8;
+            UINT64 EventSelect8 : 1;
+            UINT64 EventSelect9 : 1;
+            UINT64 EventSelect10 : 1;
+            UINT64 EventSelect11 : 1;
+            UINT64 Reserve2 : 4;
+            UINT64 HostGuestOnly : 2;
+            UINT64 Reserve3 : 22;
+        };
+    };
+};
+
+
 NTSTATUS DriverEntry()
 {   
     if (!is_amd_cpu())
@@ -467,21 +618,70 @@ NTSTATUS DriverEntry()
     if (check_suport())
     {
         printf("Starting sanity check...\n");
+
+        auto hwcr = MSR::HWCR();
+        hwcr.IRPerfEn = 1;
+        MSR::HWCR(hwcr);
+
+        printf("C001_0240 %p\n", _mm_readmsr(0xC0010240));
+        printf("C001_0241 %p\n", _mm_readmsr(0xC0010241));
+
+        PerfCntrGlobalCtl global_ctl;
+        global_ctl.AsUINT64 = _mm_readmsr(0xC0000301);
+        printf("PerfCntrEn0 %i\n", global_ctl.PerfCntrEn0);
+        printf("PerfCntrEn1 %i\n", global_ctl.PerfCntrEn1);
+        printf("PerfCntrEn2 %i\n", global_ctl.PerfCntrEn2);
+        printf("PerfCntrEn3 %i\n", global_ctl.PerfCntrEn3);
+        printf("PerfCntrEn4 %i\n", global_ctl.PerfCntrEn4);
+        printf("PerfCntrEn5 %i\n", global_ctl.PerfCntrEn5);
+
+        UINT32 msr[10] = {
+            0xc0010000,0xc0010001,0xc0010002,0xc0010003,
+            0xc0010200,0xc0010202,0xc0010204,0xc0010206,
+            0xc0010208,0xc001020A
+        };
+        for (int i = 0; i < 10; i++)
+        {
+            PEFF_CTL0 test;
+            test.AsUINT64 = _mm_readmsr(msr[i]);
+            printf("MSR %x: %llx\n", msr[i], test.AsUINT64);
+            //printf("EventSelect0 %i\n", test.EventSelect0);
+            //printf("EventSelect1 %i\n", test.EventSelect1);
+            //printf("EventSelect2 %i\n", test.EventSelect2);
+            //printf("EventSelect3 %i\n", test.EventSelect3);
+            //printf("EventSelect4 %i\n", test.EventSelect4);
+            //printf("EventSelect5 %i\n", test.EventSelect5);
+            //printf("EventSelect6 %i\n", test.EventSelect6);
+            //printf("EventSelect7 %i\n", test.EventSelect7);
+            //printf("UnitMask %i\n", test.UnitMask);
+            //printf("OsUserMode %i\n", test.OsUserMode);
+            //printf("Edge %i\n", test.Edge);
+            //printf("Int %i\n", test.Int);
+            //printf("En %i\n", test.En);
+            //printf("Inv %i\n", test.Inv);
+            //printf("CntMask %i\n", test.CntMask);
+            //printf("EventSelect8 %i\n", test.EventSelect8);
+            //printf("EventSelect9 %i\n", test.EventSelect9);
+            //printf("EventSelect10 %i\n", test.EventSelect10);
+            //printf("EventSelect11 %i\n", test.EventSelect11);
+            //printf("HostGuestOnly %i\n", test.HostGuestOnly);
+        }
+
         MSR_CPPC_REQUEST cppc_request;
         auto cppc_capabilities = MSR::CPPC_CAPABILITY_1();
         cppc_request.MinPerf = cppc_capabilities.LowestPerf;
         cppc_request.MaxPerf = cppc_capabilities.HighestPerf;
         cppc_request.DesPerf = cppc_capabilities.NominalPerf; // This will Set P1 later on in RUN() and disabling boosting
-
+    
         auto sanity = (SANITY_DATA*)ExAllocatePool(NonPagedPool, sizeof(SANITY_DATA));
-
+    
         auto irql = _mm_readcr8();
         _mm_writecr8(15);
         sanity->Run(cppc_request);
         _mm_writecr8(irql);
-
+    
         sanity->log_results();
-
+    
         ExFreePool(sanity);
         printf("Sanity check completed.\n");
     }
@@ -489,14 +689,14 @@ NTSTATUS DriverEntry()
     {
         printf("Starting sanity check...\n");
         auto sanity = (SANITY_DATA*)ExAllocatePool(NonPagedPool, sizeof(SANITY_DATA));
-
+    
         auto irql = _mm_readcr8();
         _mm_writecr8(15);
         sanity->Run_Legacy();
         _mm_writecr8(irql);
-
+    
         sanity->log_results();
-
+    
         ExFreePool(sanity);
         printf("Sanity check completed.\n");
     }
