@@ -238,9 +238,7 @@ public:
 
     INT64 get_workload_desync()
     {
-        auto batch_reported_cycles = reported_cycles;
-        auto batch_expected_cycles = (reported_cycles + missing_cycles);
-        return abs64(batch_reported_cycles - batch_expected_cycles);
+        return missing_cycles;
 	}
 
     bool report_workload_desync(INT64 threshold)
@@ -263,6 +261,10 @@ public:
     {
         auto old_cppc = MSR::CPPC_REQUEST();
 		MSR::CPPC_REQUEST(target_cppc);
+
+        auto hwcr = MSR::HWCR();
+        hwcr.IRPerfEn = 1;
+        MSR::HWCR(hwcr);
 
         Probe();
 
@@ -322,7 +324,7 @@ public:
         auto delta = (MSR::IRPerfCount() - irperf) - 12;
         auto expected_delta = (pm_counter / 2) * 11;
 		svme_enabled = MSR::EFER().svme;
-		irperf_extra_cycles = delta - expected_delta;
+		irperf_extra_cycles = (delta - expected_delta) / (pm_counter / 2);
         pstate_vilolation = MSR::PSTATE_STATUS().CurPstate == cmd.PstateCmd;
         MSR::CPPC_REQUEST(old_cppc);
         return;
@@ -409,7 +411,7 @@ public:
             "Power state elevation",
             elevation_flagged ? "FLAGGED" : "OK",
             detail,
-            "0");
+            "1");
         flagged_count += elevation_flagged ? 1 : 0;
 
         auto tsc_flagged = report_tsc_desync(2.5);
@@ -439,13 +441,13 @@ public:
             "500");
         flagged_count += workload_flagged ? 1 : 0;
 
-		auto irperf_flagged = report_irperf_extra_cycles(500);
+		auto irperf_flagged = report_irperf_extra_cycles(1);
 		sprintf(detail, "%llu cycles", get_irperf_extra_cycles());
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
             "IRPerf cycles desync",
             irperf_flagged ? "FLAGGED" : "OK",
             detail,
-			"0");
+			"1");
         flagged_count += irperf_flagged ? 1 : 0;
 
         printf("--------------------------------------------------------------------------------\n");
@@ -618,54 +620,76 @@ NTSTATUS DriverEntry()
     if (check_suport())
     {
         printf("Starting sanity check...\n");
+        //PEFF_CTL0 test;
+        //test.AsUINT64 = _mm_readmsr(0xc0010000);
+        //printf("EventSelect0 %i\n", test.EventSelect0);
+        //printf("EventSelect1 %i\n", test.EventSelect1);
+        //printf("EventSelect2 %i\n", test.EventSelect2);
+        //printf("EventSelect3 %i\n", test.EventSelect3);
+        //printf("EventSelect4 %i\n", test.EventSelect4);
+        //printf("EventSelect5 %i\n", test.EventSelect5);
+        //printf("EventSelect6 %i\n", test.EventSelect6);
+        //printf("EventSelect7 %i\n", test.EventSelect7);
+        //printf("UnitMask %i\n", test.UnitMask);
+        //printf("OsUserMode %i\n", test.OsUserMode);
+        //printf("Edge %i\n", test.Edge);
+        //printf("Int %i\n", test.Int);
+        //printf("En %i\n", test.En);
+        //printf("Inv %i\n", test.Inv);
+        //printf("CntMask %i\n", test.CntMask);
+        //printf("EventSelect8 %i\n", test.EventSelect8);
+        //printf("EventSelect9 %i\n", test.EventSelect9);
+        //printf("EventSelect10 %i\n", test.EventSelect10);
+        //printf("EventSelect11 %i\n", test.EventSelect11);
+        //printf("HostGuestOnly %i\n", test.HostGuestOnly);
+        //
+        //test.HostGuestOnly = 1;
+        //
+        //_mm_writemsr(0xc0010000, test.AsUINT64);
 
-        auto hwcr = MSR::HWCR();
-        hwcr.IRPerfEn = 1;
-        MSR::HWCR(hwcr);
-
-        printf("C001_0240 %p\n", _mm_readmsr(0xC0010240));
-        printf("C001_0241 %p\n", _mm_readmsr(0xC0010241));
-
-        PerfCntrGlobalCtl global_ctl;
-        global_ctl.AsUINT64 = _mm_readmsr(0xC0000301);
-        printf("PerfCntrEn0 %i\n", global_ctl.PerfCntrEn0);
-        printf("PerfCntrEn1 %i\n", global_ctl.PerfCntrEn1);
-        printf("PerfCntrEn2 %i\n", global_ctl.PerfCntrEn2);
-        printf("PerfCntrEn3 %i\n", global_ctl.PerfCntrEn3);
-        printf("PerfCntrEn4 %i\n", global_ctl.PerfCntrEn4);
-        printf("PerfCntrEn5 %i\n", global_ctl.PerfCntrEn5);
-
-        UINT32 msr[10] = {
-            0xc0010000,0xc0010001,0xc0010002,0xc0010003,
-            0xc0010200,0xc0010202,0xc0010204,0xc0010206,
-            0xc0010208,0xc001020A
-        };
-        for (int i = 0; i < 10; i++)
-        {
-            PEFF_CTL0 test;
-            test.AsUINT64 = _mm_readmsr(msr[i]);
-            printf("MSR %x: %llx\n", msr[i], test.AsUINT64);
-            //printf("EventSelect0 %i\n", test.EventSelect0);
-            //printf("EventSelect1 %i\n", test.EventSelect1);
-            //printf("EventSelect2 %i\n", test.EventSelect2);
-            //printf("EventSelect3 %i\n", test.EventSelect3);
-            //printf("EventSelect4 %i\n", test.EventSelect4);
-            //printf("EventSelect5 %i\n", test.EventSelect5);
-            //printf("EventSelect6 %i\n", test.EventSelect6);
-            //printf("EventSelect7 %i\n", test.EventSelect7);
-            //printf("UnitMask %i\n", test.UnitMask);
-            //printf("OsUserMode %i\n", test.OsUserMode);
-            //printf("Edge %i\n", test.Edge);
-            //printf("Int %i\n", test.Int);
-            //printf("En %i\n", test.En);
-            //printf("Inv %i\n", test.Inv);
-            //printf("CntMask %i\n", test.CntMask);
-            //printf("EventSelect8 %i\n", test.EventSelect8);
-            //printf("EventSelect9 %i\n", test.EventSelect9);
-            //printf("EventSelect10 %i\n", test.EventSelect10);
-            //printf("EventSelect11 %i\n", test.EventSelect11);
-            //printf("HostGuestOnly %i\n", test.HostGuestOnly);
-        }
+        //printf("C001_0240 %p\n", _mm_readmsr(0xC0010240));
+        //printf("C001_0241 %p\n", _mm_readmsr(0xC0010241));
+        //
+        //PerfCntrGlobalCtl global_ctl;
+        //global_ctl.AsUINT64 = _mm_readmsr(0xC0000301);
+        //printf("PerfCntrEn0 %i\n", global_ctl.PerfCntrEn0);
+        //printf("PerfCntrEn1 %i\n", global_ctl.PerfCntrEn1);
+        //printf("PerfCntrEn2 %i\n", global_ctl.PerfCntrEn2);
+        //printf("PerfCntrEn3 %i\n", global_ctl.PerfCntrEn3);
+        //printf("PerfCntrEn4 %i\n", global_ctl.PerfCntrEn4);
+        //printf("PerfCntrEn5 %i\n", global_ctl.PerfCntrEn5);
+        //
+        //UINT32 msr[10] = {
+        //    0xc0010000,0xc0010001,0xc0010002,0xc0010003,
+        //    0xc0010200,0xc0010202,0xc0010204,0xc0010206,
+        //    0xc0010208,0xc001020A
+        //};
+        //for (int i = 0; i < 10; i++)
+        //{
+        //    PEFF_CTL0 test;
+        //    test.AsUINT64 = _mm_readmsr(msr[i]);
+        //    printf("MSR %x: %llx\n", msr[i], test.AsUINT64);
+        //    //printf("EventSelect0 %i\n", test.EventSelect0);
+        //    //printf("EventSelect1 %i\n", test.EventSelect1);
+        //    //printf("EventSelect2 %i\n", test.EventSelect2);
+        //    //printf("EventSelect3 %i\n", test.EventSelect3);
+        //    //printf("EventSelect4 %i\n", test.EventSelect4);
+        //    //printf("EventSelect5 %i\n", test.EventSelect5);
+        //    //printf("EventSelect6 %i\n", test.EventSelect6);
+        //    //printf("EventSelect7 %i\n", test.EventSelect7);
+        //    //printf("UnitMask %i\n", test.UnitMask);
+        //    //printf("OsUserMode %i\n", test.OsUserMode);
+        //    //printf("Edge %i\n", test.Edge);
+        //    //printf("Int %i\n", test.Int);
+        //    //printf("En %i\n", test.En);
+        //    //printf("Inv %i\n", test.Inv);
+        //    //printf("CntMask %i\n", test.CntMask);
+        //    //printf("EventSelect8 %i\n", test.EventSelect8);
+        //    //printf("EventSelect9 %i\n", test.EventSelect9);
+        //    //printf("EventSelect10 %i\n", test.EventSelect10);
+        //    //printf("EventSelect11 %i\n", test.EventSelect11);
+        //    //printf("HostGuestOnly %i\n", test.HostGuestOnly);
+        //}
 
         MSR_CPPC_REQUEST cppc_request;
         auto cppc_capabilities = MSR::CPPC_CAPABILITY_1();
