@@ -1,5 +1,61 @@
 #include <intrinsics.hpp>
 
+struct PEFF_CTL
+{
+    union
+    {
+        UINT64 AsUINT64;
+        struct
+        {
+            UINT64 EventSelect_low : 8;
+            UINT64 UnitMask : 8;
+            UINT64 OsUserMode : 2;
+            UINT64 Edge : 1;
+            UINT64 Reserve0 : 1;
+            UINT64 Int : 1;
+            UINT64 Reserve1 : 1;
+            UINT64 En : 1;
+            UINT64 Inv : 1;
+            UINT64 CntMask : 8;
+            UINT64 EventSelect_high : 4;
+            UINT64 Reserve2 : 4;
+            UINT64 HostGuestOnly : 2;
+            UINT64 Reserve3 : 22;
+        };
+    };
+};
+
+struct PERF_CTR
+{
+    union
+    {
+        UINT64 AsUINT64;
+        struct
+        {
+            UINT64 CTR : 48;
+            UINT64 Reserved : 16;
+        };
+    };
+};
+
+struct PerfCntrGlobalCtl
+{
+    union
+    {
+        UINT64 AsUINT64;
+        struct
+        {
+            UINT64 PerfCntrEn0 : 1;
+            UINT64 PerfCntrEn1 : 1;
+            UINT64 PerfCntrEn2 : 1;
+            UINT64 PerfCntrEn3 : 1;
+            UINT64 PerfCntrEn4 : 1;
+            UINT64 PerfCntrEn5 : 1;
+            UINT64 Reserve0 : 58;
+        };
+    };
+};
+
 
 
 struct PERFORMANCE_DATA
@@ -121,6 +177,7 @@ private:
 	UINT64 irperf_extra_cycles;
     bool svme_enabled;
     bool pstate_vilolation;
+	UINT64 host_pmc_delta;
 
     inline INT64 abs64(INT64 value) { return (value < 0) ? -value : value; }
 
@@ -256,9 +313,28 @@ public:
         return get_irperf_extra_cycles() > threshold;
 	}
 
+    INT64 get_host_pmc_delta()
+    {
+        return host_pmc_delta;
+	}
+
+    bool report_host_pmc_delta(INT64 threshold)
+    {
+        return get_host_pmc_delta() > threshold;
+    }
 
     void Run(MSR_CPPC_REQUEST target_cppc)
     {
+        PEFF_CTL ctl{ 0 };
+        ctl.HostGuestOnly = 2;
+        ctl.EventSelect_low = 0xD1;
+        ctl.OsUserMode = 3;
+        ctl.En = 1;
+        _mm_writemsr(0xC0010200, ctl.AsUINT64);
+
+        PERF_CTR ctr_init{ 0 };
+        ctr_init.AsUINT64 = _mm_readmsr(0xC0010201);
+
         auto old_cppc = MSR::CPPC_REQUEST();
 		MSR::CPPC_REQUEST(target_cppc);
 
@@ -323,10 +399,21 @@ public:
             _mm_readmsr(MSR::_MSR_EFER);
         auto delta = (MSR::IRPerfCount() - irperf) - 12;
         auto expected_delta = (pm_counter / 2) * 11;
-		svme_enabled = MSR::EFER().svme;
+        svme_enabled = MSR::EFER().svme;
 		irperf_extra_cycles = (delta - expected_delta) / (pm_counter / 2);
         pstate_vilolation = MSR::PSTATE_STATUS().CurPstate == cmd.PstateCmd;
+
         MSR::CPPC_REQUEST(old_cppc);
+
+        PERF_CTR ctr{ 0 };
+        ctr.AsUINT64 = _mm_readmsr(0xC0010201);
+
+        host_pmc_delta = ctr.CTR - ctr_init.CTR;
+
+        ctl.En = 0;
+        _mm_writemsr(0xC0010200, ctl.AsUINT64);
+        ctl.AsUINT64 = 0;
+        _mm_writemsr(0xC0010200, ctl.AsUINT64);
         return;
     }
 
@@ -435,7 +522,7 @@ public:
         auto workload_flagged = report_workload_desync(500);
         sprintf(detail, "%llu cycles", get_workload_desync());
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
-            "APERF cycle desync",
+            "APERF cycles missing",
             workload_flagged ? "FLAGGED" : "OK",
             detail,
             "500");
@@ -444,17 +531,27 @@ public:
 		auto irperf_flagged = report_irperf_extra_cycles(1);
 		sprintf(detail, "%llu cycles", get_irperf_extra_cycles());
         printf("  %-30s %-9s  %-20s (limit: %s)\n",
-            "IRPerf cycles desync",
+            "IRPerf cycles extra",
             irperf_flagged ? "FLAGGED" : "OK",
             detail,
 			"1");
         flagged_count += irperf_flagged ? 1 : 0;
 
+		auto host_pmc_flagged = report_host_pmc_delta(1);
+		sprintf(detail, "%llu retired", get_host_pmc_delta());
+        printf("  %-30s %-9s  %-20s (limit: %s)\n",
+            "PMC cycles extra",
+            host_pmc_flagged ? "FLAGGED" : "OK",
+			detail,
+			"1");
+		flagged_count += host_pmc_flagged ? 1 : 0;
+
+
         printf("--------------------------------------------------------------------------------\n");
         if (flagged_count == 0)
-            printf("  Result: CLEAN  (0/6 checks flagged)\n");
+            printf("  Result: CLEAN  (0/7 checks flagged)\n");
         else
-            printf("  Result: FLAGGED (%i/6 checks flagged)\n", flagged_count);
+            printf("  Result: FLAGGED (%i/7 checks flagged)\n", flagged_count);
         printf("================================================================================\n\n");
         return;
     }
@@ -485,130 +582,6 @@ bool is_amd_cpu()
     __cpuid(cpu_info, 0);
     return cpu_info[1] == 'htuA';
 }
-
-struct PEFF_CTL0
-{
-    union
-    {
-        UINT64 AsUINT64;
-        struct
-        {
-            UINT64 EventSelect0 : 1;
-            UINT64 EventSelect1 : 1;
-            UINT64 EventSelect2 : 1;
-            UINT64 EventSelect3 : 1;
-            UINT64 EventSelect4 : 1;
-            UINT64 EventSelect5 : 1;
-            UINT64 EventSelect6 : 1;
-            UINT64 EventSelect7 : 1;
-            UINT64 UnitMask : 8;
-            UINT64 OsUserMode : 2;
-            UINT64 Edge : 1;
-            UINT64 Reserve0 : 1;
-            UINT64 Int : 1;
-            UINT64 Reserve1 : 1;
-            UINT64 En : 1;
-            UINT64 Inv : 1;
-            UINT64 CntMask : 8;
-            UINT64 EventSelect8 : 1;
-            UINT64 EventSelect9 : 1;
-            UINT64 EventSelect10 : 1;
-            UINT64 EventSelect11 : 1;
-            UINT64 Reserve2 : 4;
-            UINT64 HostGuestOnly : 2;
-            UINT64 Reserve3 : 22;
-        };
-    };
-};
-
-struct PERF_LEGACY_CTL0
-{
-    union
-    {
-        UINT64 AsUINT64;
-        struct
-        {
-            UINT64 EventSelect0 : 1;
-            UINT64 EventSelect1 : 1;
-            UINT64 EventSelect2 : 1;
-            UINT64 EventSelect3 : 1;
-            UINT64 EventSelect4 : 1;
-            UINT64 EventSelect5 : 1;
-            UINT64 EventSelect6 : 1;
-            UINT64 EventSelect7 : 1;
-            UINT64 UnitMask : 8;
-            UINT64 OsUserMode : 2;
-            UINT64 Edge : 1;
-            UINT64 Reserve0 : 1;
-            UINT64 Int : 1;
-            UINT64 Reserve1 : 1;
-            UINT64 En : 1;
-            UINT64 Inv : 1;
-            UINT64 CntMask : 8;
-            UINT64 EventSelect8 : 1;
-            UINT64 EventSelect9 : 1;
-            UINT64 EventSelect10 : 1;
-            UINT64 EventSelect11 : 1;
-            UINT64 Reserve2 : 4;
-            UINT64 HostGuestOnly : 2;
-            UINT64 Reserve3 : 22;
-        };
-    };
-};
-
-struct PerfCntrGlobalCtl
-{
-    union
-    {
-        UINT64 AsUINT64;
-        struct
-        {
-            UINT64 PerfCntrEn0 : 1;
-			UINT64 PerfCntrEn1 : 1;
-            UINT64 PerfCntrEn2 : 1;
-            UINT64 PerfCntrEn3 : 1;
-            UINT64 PerfCntrEn4 : 1;
-            UINT64 PerfCntrEn5 : 1;
-			UINT64 Reserve0 : 58;
-        };
-	};
-};
-
-struct DF_PERF_CTL
-{
-    union
-    {
-        UINT64 AsUINT64;
-        struct
-        {
-            UINT64 EventSelect0 : 1;
-            UINT64 EventSelect1 : 1;
-            UINT64 EventSelect2 : 1;
-            UINT64 EventSelect3 : 1;
-            UINT64 EventSelect4 : 1;
-            UINT64 EventSelect5 : 1;
-            UINT64 EventSelect6 : 1;
-            UINT64 EventSelect7 : 1;
-            UINT64 UnitMask : 8;
-            UINT64 OsUserMode : 2;
-            UINT64 Edge : 1;
-            UINT64 Reserve0 : 1;
-            UINT64 Int : 1;
-            UINT64 Reserve1 : 1;
-            UINT64 En : 1;
-            UINT64 Inv : 1;
-            UINT64 CntMask : 8;
-            UINT64 EventSelect8 : 1;
-            UINT64 EventSelect9 : 1;
-            UINT64 EventSelect10 : 1;
-            UINT64 EventSelect11 : 1;
-            UINT64 Reserve2 : 4;
-            UINT64 HostGuestOnly : 2;
-            UINT64 Reserve3 : 22;
-        };
-    };
-};
-
 
 NTSTATUS DriverEntry()
 {   
@@ -724,7 +697,7 @@ NTSTATUS DriverEntry()
         ExFreePool(sanity);
         printf("Sanity check completed.\n");
     }
-
+    
 	
     return STATUS_SUCCESS;
 }
